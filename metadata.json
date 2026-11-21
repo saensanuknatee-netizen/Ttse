@@ -1,0 +1,6 @@
+{
+  "name": "AuraNav TTS",
+  "description": "AI-powered bilingual (Thai & English) system-wide Android TTS engine with natural co-pilot speech rewriting for Google Maps navigation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

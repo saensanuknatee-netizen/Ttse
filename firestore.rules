@@ -1,0 +1,152 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default-deny all unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HARDENED PRIMITIVES ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidVoiceId(v) {
+      return v is string && v.size() >= 1 && v.size() <= 24 &&
+        v in ['orbit', 'pegasus', 'vega', 'ursa', 'nova', 'lyra', 'orion', 'eclipse', 'dipper', 'capella'];
+    }
+
+    function isValidStyleId(s) {
+      return s is string && s.size() >= 1 && s.size() <= 24 &&
+        s in ['natural', 'calm', 'energetic', 'professional', 'warm'];
+    }
+
+    function isValidAiModeId(m) {
+      return m is string && m.size() >= 1 && m.size() <= 24 &&
+        m in ['off', 'light', 'copilot'];
+    }
+
+    function isValidParticleModeId(p) {
+      return p is string && p.size() >= 1 && p.size() <= 24 &&
+        p in ['smart_context', 'polite', 'off'];
+    }
+
+    function isValidBackendId(b) {
+      return b is string && b.size() >= 1 && b.size() <= 32 &&
+        b in ['auto_hybrid', 'firebase_gemini_tts', 'google_cloud_tts'];
+    }
+
+    function isValidLocaleTag(l) {
+      return l is string && l.size() >= 2 && l.size() <= 20 &&
+        l in ['th-TH', 'en-US', 'en-GB', 'th-TH-mixed'];
+    }
+
+    // --- VALIDATION BLUEPRINTS ---
+    function isValidTtsSettings(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.userId == request.auth.uid &&
+        isValidVoiceId(data.voiceId) &&
+        isValidStyleId(data.styleId) &&
+        isValidAiModeId(data.aiModeId) &&
+        isValidParticleModeId(data.particleModeId) &&
+        data.pitchSemitones is number && data.pitchSemitones >= -3.0 && data.pitchSemitones <= 3.0 &&
+        data.expressiveness is number && data.expressiveness >= 0.0 && data.expressiveness <= 1.0 &&
+        data.speakingRate is number && data.speakingRate >= 0.75 && data.speakingRate <= 1.35 &&
+        isValidBackendId(data.synthesisBackendId) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidCustomPhrase(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.userId == request.auth.uid &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 80 &&
+        data.rawText is string && data.rawText.size() >= 1 && data.rawText.size() <= 500 &&
+        (!('rewrittenText' in data) || (data.rewrittenText is string && data.rewrittenText.size() <= 700)) &&
+        isValidVoiceId(data.voiceId) &&
+        isValidLocaleTag(data.localeTag) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- USER-SCOPED COLLECTIONS ---
+    match /users/{userId}/settings/{settingId} {
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(settingId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidId(settingId) &&
+        isValidTtsSettings(incoming()) &&
+        incoming().keys().hasAll([
+          'userId', 'voiceId', 'styleId', 'aiModeId', 'particleModeId',
+          'pitchSemitones', 'expressiveness', 'speakingRate', 'synthesisBackendId',
+          'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'voiceId', 'styleId', 'aiModeId', 'particleModeId',
+          'pitchSemitones', 'expressiveness', 'speakingRate', 'synthesisBackendId',
+          'createdAt', 'updatedAt'
+        ]);
+
+      allow update: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidId(settingId) &&
+        isValidTtsSettings(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'voiceId', 'styleId', 'aiModeId', 'particleModeId',
+          'pitchSemitones', 'expressiveness', 'speakingRate', 'synthesisBackendId',
+          'updatedAt'
+        ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId) && isValidId(settingId);
+    }
+
+    match /users/{userId}/customPhrases/{phraseId} {
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(phraseId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidId(phraseId) &&
+        isValidCustomPhrase(incoming()) &&
+        incoming().keys().hasAll([
+          'userId', 'title', 'rawText', 'voiceId', 'localeTag', 'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'title', 'rawText', 'rewrittenText', 'voiceId', 'localeTag', 'createdAt', 'updatedAt'
+        ]);
+
+      allow update: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidId(phraseId) &&
+        isValidCustomPhrase(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'rawText', 'rewrittenText', 'voiceId', 'localeTag', 'updatedAt'
+        ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId) && isValidId(phraseId);
+    }
+  }
+}

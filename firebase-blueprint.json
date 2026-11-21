@@ -1,0 +1,137 @@
+{
+  "entities": {
+    "TtsVoiceProfileSettings": {
+      "title": "TtsVoiceProfileSettings",
+      "description": "Cloud-synced AuraNav TTS voice profile, speaking style, AI rewriter mode, and prosody settings for an authenticated user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authenticated Firebase UID owning this configuration."
+        },
+        "voiceId": {
+          "type": "string",
+          "enum": ["orbit", "pegasus", "vega", "ursa", "nova", "lyra", "orion", "eclipse", "dipper", "capella"],
+          "description": "Selected AuraNav voice profile ID."
+        },
+        "styleId": {
+          "type": "string",
+          "enum": ["natural", "calm", "energetic", "professional", "warm"],
+          "description": "Selected speaking style ID."
+        },
+        "aiModeId": {
+          "type": "string",
+          "enum": ["off", "light", "copilot"],
+          "description": "AI natural speech rewriter mode."
+        },
+        "particleModeId": {
+          "type": "string",
+          "enum": ["smart_context", "polite", "off"],
+          "description": "Smart Thai polite particle policy."
+        },
+        "pitchSemitones": {
+          "type": "number",
+          "description": "Vocal pitch offset in semitones from -3.0 to +3.0."
+        },
+        "expressiveness": {
+          "type": "number",
+          "description": "Expressiveness level from 0.0 to 1.0."
+        },
+        "speakingRate": {
+          "type": "number",
+          "description": "Speaking speed multiplier from 0.75 to 1.35."
+        },
+        "synthesisBackendId": {
+          "type": "string",
+          "enum": ["auto_hybrid", "firebase_gemini_tts", "google_cloud_tts"],
+          "description": "Preferred neural audio synthesizer backend."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp written with FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp written with FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "userId",
+        "voiceId",
+        "styleId",
+        "aiModeId",
+        "particleModeId",
+        "pitchSemitones",
+        "expressiveness",
+        "speakingRate",
+        "synthesisBackendId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SavedNavigationPhrase": {
+      "title": "SavedNavigationPhrase",
+      "description": "User-saved custom Thai/English navigation test phrase and AI rewrite sample synced across devices.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authenticated Firebase UID owning this saved phrase."
+        },
+        "title": {
+          "type": "string",
+          "description": "Short label for the saved navigation phrase (1-80 chars)."
+        },
+        "rawText": {
+          "type": "string",
+          "description": "Original navigation prompt text (1-500 chars)."
+        },
+        "rewrittenText": {
+          "type": "string",
+          "description": "Optional AI-rewritten spoken output (0-700 chars)."
+        },
+        "voiceId": {
+          "type": "string",
+          "enum": ["orbit", "pegasus", "vega", "ursa", "nova", "lyra", "orion", "eclipse", "dipper", "capella"],
+          "description": "Voice profile associated with this phrase."
+        },
+        "localeTag": {
+          "type": "string",
+          "enum": ["th-TH", "en-US", "en-GB", "th-TH-mixed"],
+          "description": "Language locale tag for the phrase."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp written with FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp written with FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "userId",
+        "title",
+        "rawText",
+        "voiceId",
+        "localeTag",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/TtsVoiceProfileSettings" },
+      "description": "User-scoped AuraNav TTS voice profile and prosody preferences."
+    },
+    "/users/{userId}/customPhrases/{phraseId}": {
+      "schema": { "$ref": "#/entities/SavedNavigationPhrase" },
+      "description": "User-scoped library of saved custom navigation test phrases."
+    }
+  }
+}

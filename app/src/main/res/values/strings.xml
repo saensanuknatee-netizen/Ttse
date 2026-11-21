@@ -1,0 +1,64 @@
+<resources>
+    <string name="app_name">AuraNav TTS</string>
+    <string name="tts_service_label">AuraNav AI TTS (ไทย / English)</string>
+
+    <!-- Main Screen: Voice Selector -->
+    <string name="title_select_voice">เลือกเสียง</string>
+    <string name="cd_open_simulator_settings">เปิดหน้าจำลองการนำทางและตั้งค่า API</string>
+    <string name="cd_open_system_tts">เปิดตั้งค่าเสียงของระบบ</string>
+    <string name="cd_voice_selected">เลือกเสียงนี้แล้ว</string>
+    <string name="cd_play_preview">ทดสอบฟังเสียงตัวอย่าง</string>
+    <string name="cd_stop_preview">หยุดเล่นเสียงตัวอย่าง</string>
+    <string name="cd_back">ย้อนกลับ</string>
+    <string name="cd_mic_transcribe">บันทึกเสียงเพื่อถอดข้อความด้วย AI</string>
+    <string name="cd_toggle_key_visibility">สลับการแสดงคีย์ API</string>
+
+    <string name="section_voices">โปรไฟล์เสียงนำทาง (10 เสียง)</string>
+    <string name="section_speaking_style">สไตล์การพูด (Speaking Style)</string>
+    <string name="section_ai_rewriter">AI ปรับคำพูดให้เป็นธรรมชาติ</string>
+    <string name="section_tone_controls">ปรับโทนเสียงและจังหวะการพูด</string>
+    <string name="section_live_preview">ทดสอบเสียงแบบเรียลไทม์ (Live Preview)</string>
+
+    <string name="label_pitch_slider">โทนเสียง (ทุ้ม – ใส)</string>
+    <string name="label_expressiveness_slider">ระดับอารมณ์และความเป็นคน</string>
+    <string name="label_speed_slider">ความเร็วในการพูด</string>
+    <string name="label_raw_text">ข้อความต้นฉบับ</string>
+    <string name="label_rewritten_text">คำพูดที่ AI ปรับใหม่</string>
+
+    <string name="btn_test_voice">ทดสอบเสียง</string>
+    <string name="btn_stop_voice">หยุดเล่น</string>
+    <string name="btn_cancel">ยกเลิก</string>
+    <string name="btn_confirm">ยืนยัน</string>
+
+    <!-- Simulator & Settings Screen -->
+    <string name="title_simulator_settings">ตั้งค่าและจำลองการนำทาง</string>
+    <string name="btn_open_system_tts_settings">เปิดตั้งค่าเสียงของระบบ / Google Maps</string>
+    <string name="subtitle_system_tts_settings">เลือก AuraNav AI TTS เป็นเครื่องมือหลักเพื่อให้ Google Maps อ่านเสียงนำทางผ่านระบบนี้</string>
+
+    <string name="section_simulator">คอนโซลจำลอง Google Maps &amp; ถอดเสียงไมโครโฟน</string>
+    <string name="hint_custom_phrase">พิมพ์ประโยคนำทาง หรือกดไมค์พูดทดสอบ…</string>
+    <string name="btn_simulate_speak">จำลองและฟังเสียง</string>
+    <string name="btn_deep_think_audit">วิเคราะห์เชิงลึก (High Thinking)</string>
+
+    <string name="section_thai_particles">ระบบหางเสียงภาษาไทย (Smart Particles)</string>
+    <string name="section_engine_api">เครื่องมือสังเคราะห์เสียง &amp; คีย์ API</string>
+    <string name="label_cloud_tts_key">Google Cloud TTS API Key (Chirp 3 HD / Neural2)</string>
+    <string name="label_gemini_key_optional">Gemini API Key แบบกำหนดเอง (ไม่บังคับ)</string>
+    <string name="btn_save_keys">บันทึกคีย์ (เข้ารหัส AES-256)</string>
+    <string name="btn_test_connection">ทดสอบการเชื่อมต่อ</string>
+
+    <string name="section_cache_status">แคชความหน่วงต่ำ 2 ชั้น (Dual-Layer Cache)</string>
+    <string name="btn_clear_cache">ล้างแคชทั้งหมด</string>
+
+    <!-- Sample Texts -->
+    <string name="sample_thai_default">ในอีก 800 เมตร เลี้ยวขวาเข้าสู่ ถนนสุขุมวิท</string>
+    <string name="sample_english_default">In 500 meters, turn left onto Rama IV Road</string>
+    <string name="sample_mixed_default">ในอีก 400 เมตร เลี้ยวซ้ายเข้าสู่ Terminal 21 Asok</string>
+
+    <!-- Feedback Messages -->
+    <string name="msg_settings_saved">บันทึกเสียง %1$s เป็นค่าเริ่มต้นสำหรับระบบแล้ว</string>
+    <string name="msg_changes_discarded">ยกเลิกการเปลี่ยนแปลงแล้ว</string>
+    <string name="msg_cache_cleared">ล้างแคชข้อความและเสียงทั้งหมดแล้ว</string>
+    <string name="msg_keys_saved">บันทึกคีย์ลงใน EncryptedSharedPreferences เรียบร้อยแล้ว</string>
+    <string name="msg_mic_permission_denied">กรุณาอนุญาตสิทธิ์ไมโครโฟนเพื่อใช้ฟีเจอร์ถอดเสียงพูด</string>
+</resources>
