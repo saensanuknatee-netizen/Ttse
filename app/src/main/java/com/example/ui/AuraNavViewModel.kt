@@ -9,8 +9,6 @@ import com.example.ai.GeminiTextRewriter
 import com.example.data.SecurePreferencesRepository
 import com.example.data.cache.AudioPcmDiskCache
 import com.example.data.cache.AuraNavDatabase
-import com.example.data.cloud.CloudSyncRepository
-import com.example.data.cloud.SavedNavigationPhraseDoc
 import com.example.model.AiRewriteMode
 import com.example.model.CacheStats
 import com.example.model.PreviewLanguage
@@ -22,16 +20,13 @@ import com.example.model.TtsUserSettings
 import com.example.tts.DualTtsAudioClient
 import com.example.tts.MicrophoneAudioRecorder
 import com.example.tts.PcmAudioPlayer
-import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -59,17 +54,9 @@ sealed interface ConnectionTestState {
     data class Result(val success: Boolean, val summary: String) : ConnectionTestState
 }
 
-sealed interface SavedPhrasesUiState {
-    data object Loading : SavedPhrasesUiState
-    data class Success(val phrases: List<SavedNavigationPhraseDoc>) : SavedPhrasesUiState
-    data class Error(val message: String) : SavedPhrasesUiState
-}
-
 data class AuraNavUiState(
     val draftSettings: TtsUserSettings = TtsUserSettings(),
     val savedSettings: TtsUserSettings = TtsUserSettings(),
-    val isCloudSynced: Boolean = false,
-    val cloudSyncError: String? = null,
     val previewLanguage: PreviewLanguage = PreviewLanguage.THAI,
     val previewState: AudioPlayState = AudioPlayState.Idle,
     val previewRewrite: RewriteResult? = null,
@@ -102,7 +89,6 @@ class AuraNavViewModel(application: Application) : AndroidViewModel(application)
     private val database = AuraNavDatabase.getInstance(application)
     private val phraseDao = database.phraseCacheDao()
     private val pcmDiskCache = AudioPcmDiskCache.getInstance(application)
-    private val cloudSyncRepo = CloudSyncRepository(application)
     private val geminiRewriter = GeminiTextRewriter()
     private val navigationRewriter = AiNavigationRewriter(phraseDao, geminiRewriter, securePrefs)
     private val audioClient = DualTtsAudioClient(application, pcmDiskCache, securePrefs)
@@ -138,58 +124,8 @@ class AuraNavViewModel(application: Application) : AndroidViewModel(application)
         initialValue = CacheStats()
     )
 
-    // Real-time Firestore stream with mandatory two-tier CancellationException / FirebaseFirestoreException unwrapping
-    val savedPhrasesState: StateFlow<SavedPhrasesUiState> = cloudSyncRepo.observeSavedPhrases()
-        .map<List<SavedNavigationPhraseDoc>, SavedPhrasesUiState> { SavedPhrasesUiState.Success(it) }
-        .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            val rootError = firestoreError ?: error
-            emit(SavedPhrasesUiState.Error(rootError.message ?: "ไม่สามารถซิงค์คลังประโยคจากคลาวด์ได้"))
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = SavedPhrasesUiState.Loading
-        )
-
     init {
-        observeRemoteCloudSettings()
         refreshPreviewTextOnly()
-    }
-
-    private fun observeRemoteCloudSettings() {
-        viewModelScope.launch {
-            cloudSyncRepo.observeCloudSettings()
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val rootError = firestoreError ?: error
-                    _uiState.update {
-                        it.copy(cloudSyncError = rootError.message ?: "ไม่สามารถซิงค์การตั้งค่าจากคลาวด์ได้")
-                    }
-                }
-                .collect { remoteDoc ->
-                    if (remoteDoc != null) {
-                        val syncedSettings = remoteDoc.toTtsUserSettings()
-                        securePrefs.saveSettings(syncedSettings)
-                        _uiState.update { state ->
-                            val shouldUpdateDraft = !state.hasUnsavedChanges
-                            state.copy(
-                                savedSettings = syncedSettings,
-                                draftSettings = if (shouldUpdateDraft) syncedSettings else state.draftSettings,
-                                isCloudSynced = true,
-                                cloudSyncError = null
-                            )
-                        }
-                        refreshPreviewTextOnly()
-                    }
-                }
-        }
     }
 
     fun selectVoice(voiceId: String) {
@@ -219,7 +155,6 @@ class AuraNavViewModel(application: Application) : AndroidViewModel(application)
         _uiState.update { state ->
             state.copy(draftSettings = updated, savedSettings = updated)
         }
-        syncSettingsToCloud(updated, showToast = false)
         refreshPreviewTextOnly()
     }
 
@@ -229,7 +164,6 @@ class AuraNavViewModel(application: Application) : AndroidViewModel(application)
         _uiState.update { state ->
             state.copy(draftSettings = updated, savedSettings = updated)
         }
-        syncSettingsToCloud(updated, showToast = false)
     }
 
     fun updatePitch(semitones: Float) {
@@ -263,30 +197,7 @@ class AuraNavViewModel(application: Application) : AndroidViewModel(application)
         _uiState.update {
             it.copy(
                 savedSettings = draft,
-                snackbarMessage = "บันทึกเสียง ${draft.activeVoice.displayName} และซิงค์ขึ้น Cloud Firestore แล้ว"
-            )
-        }
-        syncSettingsToCloud(draft, showToast = false)
-    }
-
-    private fun syncSettingsToCloud(settings: TtsUserSettings, showToast: Boolean) {
-        viewModelScope.launch {
-            val result = cloudSyncRepo.saveTtsSettings(settings)
-            result.fold(
-                onSuccess = {
-                    _uiState.update {
-                        it.copy(
-                            isCloudSynced = true,
-                            cloudSyncError = null,
-                            snackbarMessage = if (showToast) "ซิงค์การตั้งค่าขึ้นคลาวด์สำเร็จ" else it.snackbarMessage
-                        )
-                    }
-                },
-                onFailure = { err ->
-                    _uiState.update {
-                        it.copy(cloudSyncError = err.localizedMessage ?: "บันทึกขึ้นคลาวด์ไม่สำเร็จ (บันทึกในเครื่องแล้ว)")
-                    }
-                }
+                snackbarMessage = "บันทึกเสียง ${draft.activeVoice.displayName} เป็นค่าเริ่มต้นสำหรับระบบแล้ว"
             )
         }
     }
@@ -481,54 +392,6 @@ class AuraNavViewModel(application: Application) : AndroidViewModel(application)
                     it.copy(simulatorPlayState = AudioPlayState.Error(e.localizedMessage ?: "เกิดข้อผิดพลาดในการจำลองเสียง"))
                 }
             }
-        }
-    }
-
-    fun saveCurrentSimulatorPhraseToCloud() {
-        val state = _uiState.value
-        val raw = state.simulatorInput.trim()
-        if (raw.isEmpty()) {
-            _uiState.update { it.copy(snackbarMessage = "กรุณากรอกข้อความก่อนบันทึก") }
-            return
-        }
-        val title = if (raw.length > 32) "${raw.take(32)}…" else raw
-        val rewritten = state.simulatorRewrite?.takeIf { it.rawText == raw }?.spokenText
-        val detectedLocale = state.simulatorRewrite?.detectedLanguage ?: state.simulatorLocaleTag
-
-        viewModelScope.launch {
-            val result = cloudSyncRepo.saveCustomPhrase(
-                title = title,
-                rawText = raw,
-                rewrittenText = rewritten,
-                voiceId = state.draftSettings.voiceId,
-                localeTag = detectedLocale
-            )
-            result.fold(
-                onSuccess = {
-                    _uiState.update { it.copy(snackbarMessage = "บันทึกประโยคนำทางลง Cloud Firestore แล้ว") }
-                },
-                onFailure = { err ->
-                    _uiState.update {
-                        it.copy(snackbarMessage = err.localizedMessage ?: "ไม่สามารถบันทึกประโยคลงคลาวด์ได้")
-                    }
-                }
-            )
-        }
-    }
-
-    fun deleteSavedCloudPhrase(phraseId: String) {
-        viewModelScope.launch {
-            val result = cloudSyncRepo.deleteCustomPhrase(phraseId)
-            result.fold(
-                onSuccess = {
-                    _uiState.update { it.copy(snackbarMessage = "ลบประโยคออกจากคลังคลาวด์แล้ว") }
-                },
-                onFailure = { err ->
-                    _uiState.update {
-                        it.copy(snackbarMessage = err.localizedMessage ?: "ไม่สามารถลบประโยคได้")
-                    }
-                }
-            )
         }
     }
 

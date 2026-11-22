@@ -29,9 +29,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.Logout
-import androidx.compose.material.icons.outlined.BookmarkAdd
-import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Memory
@@ -97,7 +94,6 @@ import com.example.ui.AudioPlayState
 import com.example.ui.AuraNavUiState
 import com.example.ui.ConnectionTestState
 import com.example.ui.DeepAnalysisState
-import com.example.ui.SavedPhrasesUiState
 import com.example.ui.theme.AuraErrorContainer
 import com.example.ui.theme.AuraSuccessContainer
 import com.example.ui.theme.AuraSuccessGreen
@@ -108,9 +104,6 @@ import kotlinx.coroutines.launch
 fun SimulatorSettingsScreen(
     uiState: AuraNavUiState,
     cacheStats: CacheStats,
-    savedPhrasesState: SavedPhrasesUiState,
-    userEmail: String?,
-    userDisplayName: String?,
     onNavigateBack: () -> Unit,
     onOpenSystemTtsSettings: () -> Unit,
     onUpdateSimulatorInput: (String, String?) -> Unit,
@@ -118,8 +111,6 @@ fun SimulatorSettingsScreen(
     onStopAudio: () -> Unit,
     onToggleMicTranscribe: () -> Unit,
     onRunDeepAnalysis: () -> Unit,
-    onSavePhraseToCloud: () -> Unit,
-    onDeleteSavedPhrase: (String) -> Unit,
     onSelectParticleMode: (ThaiParticleMode) -> Unit,
     onSelectBackend: (SynthesisBackend) -> Unit,
     onUpdateCloudKey: (String) -> Unit,
@@ -127,7 +118,6 @@ fun SimulatorSettingsScreen(
     onSaveApiKeys: () -> Unit,
     onTestConnections: () -> Unit,
     onClearCaches: () -> Unit,
-    onSignOut: () -> Unit,
     onSnackbarConsumed: () -> Unit
 ) {
     val context = LocalContext.current
@@ -269,21 +259,11 @@ fun SimulatorSettingsScreen(
                                 }
                             }
                         },
-                        onDeepAnalysis = onRunDeepAnalysis,
-                        onSavePhraseToCloud = onSavePhraseToCloud
+                        onDeepAnalysis = onRunDeepAnalysis
                     )
                 }
 
-                // 3. Cloud-Synced Saved Navigation Phrases (Firestore)
-                item(key = "cloud_saved_phrases") {
-                    SavedCloudPhrasesCard(
-                        savedPhrasesState = savedPhrasesState,
-                        onReplayPhrase = { raw, locale -> onRunSimulatorSpeak(raw, locale) },
-                        onDeletePhrase = onDeleteSavedPhrase
-                    )
-                }
-
-                // 4. Smart Thai Particle Mode
+                // 3. Smart Thai Particle Mode
                 item(key = "thai_particle_mode") {
                     ThaiParticleModeCard(
                         selectedMode = uiState.draftSettings.particleMode,
@@ -291,7 +271,7 @@ fun SimulatorSettingsScreen(
                     )
                 }
 
-                // 5. Engine Backend & Encrypted API Key Setup + Connection Test
+                // 4. Engine Backend & Encrypted API Key Setup + Connection Test
                 item(key = "engine_api_keys") {
                     EngineAndApiKeyCard(
                         uiState = uiState,
@@ -303,22 +283,11 @@ fun SimulatorSettingsScreen(
                     )
                 }
 
-                // 6. Dual-Layer Zero-Latency Cache Monitor
+                // 5. Dual-Layer Zero-Latency Cache Monitor
                 item(key = "cache_monitor") {
                     DualLayerCacheCard(
                         cacheStats = cacheStats,
                         onClearCaches = onClearCaches
-                    )
-                }
-
-                // 7. Google Account & Cloud Firestore Sync Status
-                item(key = "account_cloud_sync") {
-                    CloudAccountCard(
-                        userDisplayName = userDisplayName,
-                        userEmail = userEmail,
-                        isCloudSynced = uiState.isCloudSynced,
-                        cloudSyncError = uiState.cloudSyncError,
-                        onSignOut = onSignOut
                     )
                 }
 
@@ -335,8 +304,7 @@ private fun SimulatorConsoleCard(
     onSimulate: (String?, String?) -> Unit,
     onStop: () -> Unit,
     onMicClick: () -> Unit,
-    onDeepAnalysis: () -> Unit,
-    onSavePhraseToCloud: () -> Unit
+    onDeepAnalysis: () -> Unit
 ) {
     val isBusy = uiState.simulatorPlayState is AudioPlayState.Rewriting ||
         uiState.simulatorPlayState is AudioPlayState.Synthesizing
@@ -501,19 +469,6 @@ private fun SimulatorConsoleCard(
                 }
             }
 
-            OutlinedButton(
-                onClick = onSavePhraseToCloud,
-                shape = RoundedCornerShape(50),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .testTag("save_phrase_cloud_button")
-            ) {
-                Icon(Icons.Outlined.BookmarkAdd, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("บันทึกประโยคนี้ลงคลาวด์ (Cloud Firestore)", style = MaterialTheme.typography.labelMedium)
-            }
-
             if (uiState.simulatorPlayState is AudioPlayState.Error) {
                 Text(
                     text = uiState.simulatorPlayState.message,
@@ -659,117 +614,6 @@ private fun SimulatorConsoleCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SavedCloudPhrasesCard(
-    savedPhrasesState: SavedPhrasesUiState,
-    onReplayPhrase: (String, String) -> Unit,
-    onDeletePhrase: (String) -> Unit
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.CloudDone,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "คลังประโยคนำทางบนคลาวด์ (Cloud Firestore)",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-
-            when (savedPhrasesState) {
-                is SavedPhrasesUiState.Loading -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Text("กำลังซิงค์คลังประโยค…", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                is SavedPhrasesUiState.Error -> {
-                    Text(
-                        text = savedPhrasesState.message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                is SavedPhrasesUiState.Success -> {
-                    if (savedPhrasesState.phrases.isEmpty()) {
-                        Text(
-                            text = "ยังไม่มีประโยคที่บันทึก กด \"บันทึกประโยคนี้ลงคลาวด์\" ด้านบนเพื่อซิงค์ข้ามอุปกรณ์",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        savedPhrasesState.phrases.forEach { phrase ->
-                            Surface(
-                                shape = MaterialTheme.shapes.medium,
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(MaterialTheme.shapes.medium)
-                                    .clickable { onReplayPhrase(phrase.rawText, phrase.localeTag) }
-                                    .testTag("saved_cloud_phrase_${phrase.id}")
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = phrase.rawText,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        if (phrase.rewrittenText.isNotBlank()) {
-                                            Text(
-                                                text = "AI: ${phrase.rewrittenText}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
-                                    IconButton(
-                                        onClick = { onDeletePhrase(phrase.id) },
-                                        modifier = Modifier.minimumInteractiveComponentSize()
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.DeleteOutline,
-                                            contentDescription = "ลบประโยคที่บันทึก",
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -1080,79 +924,6 @@ private fun DualLayerCacheCard(
                 Icon(Icons.Outlined.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(stringResource(R.string.btn_clear_cache), style = MaterialTheme.typography.labelLarge)
-            }
-        }
-    }
-}
-
-@Composable
-private fun CloudAccountCard(
-    userDisplayName: String?,
-    userEmail: String?,
-    isCloudSynced: Boolean,
-    cloudSyncError: String?,
-    onSignOut: () -> Unit
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = userDisplayName?.takeIf { it.isNotBlank() } ?: "บัญชี Google ของคุณ",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = userEmail ?: "เชื่อมต่อ Firebase Authentication แล้ว",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = AuraSuccessContainer
-                ) {
-                    Text(
-                        text = if (isCloudSynced) "ซิงค์แล้ว" else "ออนไลน์",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AuraSuccessGreen,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            cloudSyncError?.let { err ->
-                Text(
-                    text = err,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-
-            OutlinedButton(
-                onClick = onSignOut,
-                shape = RoundedCornerShape(50),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .testTag("sign_out_button")
-            ) {
-                Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("ออกจากระบบ (Sign Out)", style = MaterialTheme.typography.labelLarge)
             }
         }
     }
